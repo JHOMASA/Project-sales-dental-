@@ -3,3 +3,84 @@ import pandas as pd
 
 # Import the document 
 read_csv = pd.read_csv(r"C:\Users\legion\OneDrive\Documents\projects\Finanzas blancsac.csv", encoding = 'iso-8859-1') 
+
+# Became the head columns in UPPER:
+read_csv.columns = read_csv.columns.str.upper()
+
+# Drop duplicates value 
+read_csv.drop_duplicates()
+
+# Transform column "PRODUCT" in string:
+read_csv['PRODUCTO'] = read_csv['PRODUCTO'].astype(str)
+
+# Define the function to split the column "PRODUCT" column:
+def split_PRODUCTO(row):
+    parts = row.split('x', 1)
+    if len(parts) == 2:
+        return parts[1].strip(), parts[0].strip()
+    else:
+        return row.strip(), None
+
+# Apply the function in each row:
+read_csv['VOLUMEN PRODUCTS'], read_csv['DESCRIPCIÓN PRODUCTS'] = zip(*read_csv['PRODUCTO'].apply(split_PRODUCTO))
+
+# Extract the last word which is MARCA:
+read_csv['MARCA'] = read_csv['DESCRIPCIÓN PRODUCTS'].str.split().str[-1]
+
+# Seek the unique Descripcion products:
+unique_descriptions = read_csv['DESCRIPCIÓN PRODUCTS'].unique()
+unique_descriptions = sorted(unique_descriptions)
+
+# Became the "PRECIO UNI" column to numeric:
+read_csv[" PRECIO UNI "] = pd.to_numeric(read_csv[" PRECIO UNI "], errors='coerce')
+
+# Became the the columns "COSTO UNI" AND "DESCUENTO" to numeric:
+read_csv[" COSTO UNI "] = pd.to_numeric(read_csv[" COSTO UNI "], errors = 'coerce')
+read_csv[" DESCUENTO "] = pd.to_numeric(read_csv[" DESCUENTO "], errors = 'coerce')
+
+# Complete NaN   to 0 value:
+read_csv[' DESCUENTO '] = read_csv[' DESCUENTO '].fillna(0)
+
+# Remove words which do not have anything to do in the column MARCA:
+Prefijo = ['ACRILIC', 'ACTIVAD', 'ADUL', 'AGU', 'ALUMIN', 'AMARILL', 'ADHESIV', 'ALBU', 'ALCHO', 'ALETA', 'ALGOD', 'ANDIN', 'ANGULACIO', 'ANGUL', 'ANILL', 'BEB', 'BRUS', 'CART', 'CHROM', 'CILINDRI', 'CLEA',
+           'CONDUC', 'CRIST', 'Descartabl','DIVISIO', 'ELASTIC', 'ENCI', 'EXTRAO', 'FLAM', 'FRES', 'GINGIV', 'GRAN', 'GUTATER', 'LABORATO', 'LEGR', 'LUBRIG', 'LUMINI', 'MARC', 'MAS', 'MEDI', 'METALI', 'MORDED',
+            'ONZ', 'OPTI', 'ORTODONC', 'PEQUE', 'PERFOR', 'PLAC', 'PRE', 'PUNT', 'RADIOGRAF', 'REDON', 'SUP', 'TRANSPARE', 'TRON', 'UDS', 'ULTRA', 'UNID', 'USP', 'VIDRI', 'VILLARO', 'WAV' ]
+
+for Prefijos in Prefijo:
+    read_csv = read_csv[~read_csv['MARCA'].str.lower().str.contains(rf'\b{Prefijos}', case = False)]
+read_csv.reset_index(drop = True, inplace = True)
+
+# Remove characters which do not have anything to do in the column MARCA:
+Prefij = ['UÌÎÌÓA', 'P/', 'NÌ','I/DER', 'I/IZQ', 'C/', '1`', '45X45', '5X5', '96Ì´åÁ', '030X25']
+for Prefijo in Prefij:
+    read_csv = read_csv[~read_csv['MARCA'].str.lower().str.contains(rf'\b{Prefijo}', case = False)]
+read_csv.reset_index(drop = True, inplace = True)
+
+# Split the column "FECHA" which is in datetime value in two columns  "FECHAS" and "TIME":
+try:
+    readd_csv['FECHA'] = pd.to_datetime(readd_csv['FECHA'], format='%Y-%m-%d %H:%M:%S', errors = 'coerce')
+    readd_csv['FECHAS'] = readd_csv['FECHA'].dt.date
+    readd_csv['TIEMPO'] = readd_csv['FECHA'].dt.time
+except ValueError as ve:
+    print(f"Error: {ve}")
+# Drop column "FECHA":
+readd_csv.drop(columns = ["FECHA"], errors = 'coerce')
+
+# Load  two different documents in study:
+Personal_Information = r"C:\Users\legion\OneDrive\Documents\Python Scripts\Report2.csv"
+Report_total = r"c:\Users\legion\OneDrive\Documents\Python Scripts\Report_total.csv"
+
+#Load  two differents sheets from different documents in csv. format
+encabezado_df = pd.read_csv(Personal_Information)
+Report_total_df = pd.read_csv(Report_total)
+
+#Select the rows and columns for the analysis 
+columns_to_select = ["TIPO", "CLIENTE ", "NUMERO", "FECHAS", "TIEMPO", "DNI/RUC"]
+encabezado_df = encabezado_df[columns_to_select]
+common_column_name = 'NUMERO'
+
+#Merge  the dataframes in  a common column  
+merged_df = pd.merge(encabezado_df, Report_total_df, on=common_column_name, how = 'inner')
+
+# Save the document 
+merged_df.to_csv('Report_Final_BL.csv', index = False)
