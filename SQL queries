@@ -1,1 +1,95 @@
+# Query used for calculate the Cost related bottlenecks
+USE [Ventas Report]
+CREATE VIEW [TIEMPOBOTELLA COSTO] AS
+WITH MAXTIME AS (
+	SELECT [CLIENTE ],[DESCRIPCION PRODUCTS],MAX(TIEMPOS) AS BottleneckTime, MAX([ COSTO UNI ]  * UNIDADES) AS MaxTotalCost
+	FROM Report_Final_BL
+	GROUP BY [DESCRIPCION PRODUCTS] , [CLIENTE ] 
+)
 
+SELECT T.[CLIENTE ], T.FECHAS, T.TIEMPOS, T.[DESCRIPCION PRODUCTS], MT.MaxTotalCost
+FROM  Report_Final_BL T
+INNER JOIN MAXTIME MT
+ON T.[DESCRIPCION PRODUCTS] = MT.[DESCRIPCION PRODUCTS]
+AND T.[CLIENTE ] = MT. [CLIENTE ]
+AND T.TIEMPOS = MT.BottleneckTime;
+
+# Query related to service for clients 
+WITH PickTimeMetrics AS (
+    SELECT
+        [CLIENTE ],
+        SUM(DATEDIFF(MINUTE, '00:00:00', TIEMPOS)) AS TotalPickTimeMinutes,
+        COUNT(*) AS TotalPicks,
+        SUM(UNIDADES) AS TotalItemsPicked
+    FROM  Report_Final_BL
+    GROUP BY [CLIENTE ]
+)
+
+SELECT
+    [CLIENTE ],
+    TotalPicks,
+    TotalItemsPicked,
+    TotalPickTimeMinutes,
+    TotalItemsPicked / (TotalPickTimeMinutes / 60.0) AS PickRate, 
+    TotalPickTimeMinutes / (TotalPicks * 60.0) AS TimeSpentPerPickMinutes
+FROM PickTimeMetrics;
+# Relation between Income for products and quantity purchased from CLIENTE
+WITH MonthlyProductStats AS(
+	SELECT 
+		DATEFROMPARTS(YEAR(T.FECHAS), MONTH(T.FECHAS), 1) AS MonthStart,
+		T.[CLIENTE ],
+		T.[DESCRIPCION PRODUCTS],
+		SUM(T.[ PRECIO UNI ] * T.UNIDADES) AS TotalIncome,
+		SUM(T.UNIDADES) AS TotalQuantity
+	FROM Report_Final_BL T
+	GROUP BY DATEFROMPARTS(YEAR(T.FECHAS), MONTH(T.FECHAS), 1), T.[CLIENTE ], T.[DESCRIPCION PRODUCTS]
+	),
+ClientTopProductPerMonth AS(
+	SELECT
+		MonthStart,
+		[CLIENTE ],
+		[DESCRIPCION PRODUCTS],
+		TotalIncome,
+		TotalQuantity,
+		ROW_NUMBER() OVER (PARTITION  BY MonthStart, CLIENTE ORDER BY TotalQuantity DESC) AS Rank
+	FROM MonthlyProductStats
+	)
+	SELECT
+		FORMAT(MonthStart, 'yyyy-MM') AS Month,
+		[CLIENTE ],
+		[DESCRIPCION PRODUCTS] AS MostPurchasedProduct,
+		TotalIncome AS TotalIncomeForProduct,
+		TotalQuantity AS TotalQuantityPurchased
+	FROM ClientTopProductPerMonth
+	WHERE Rank = 1
+	ORDER BY MonthStart, [CLIENTE ];
+
+# Query for Cost for Product in each MARCA
+WITH MonthlyProductStats AS(
+	SELECT 
+		DATEFROMPARTS(YEAR(T.FECHAS), MONTH(T.FECHAS), 1) AS MonthStart,
+		T.[MARCA],
+		T.[DESCRIPCION PRODUCTS],
+		SUM(T.[ COSTO UNI ] * T.UNIDADES) AS TotalCost,
+		SUM(T.UNIDADES) AS TotalQuantity
+	FROM Report_Final_BL T
+	GROUP BY DATEFROMPARTS(YEAR(T.FECHAS), MONTH(T.FECHAS), 1), T.[MARCA], T.[DESCRIPCION PRODUCTS]
+	),
+ClientTopProductPerMonth AS(
+	SELECT
+		MonthStart,
+		[MARCA],
+		[DESCRIPCION PRODUCTS],
+		TotalCost,
+		TotalQuantity,
+		ROW_NUMBER() OVER (PARTITION  BY MonthStart, MARCA ORDER BY TotalQuantity DESC) AS Rank
+	FROM MonthlyProductStats
+	)
+	SELECT
+		FORMAT(MonthStart, 'yyyy-MM') AS Month,
+		[MARCA],
+		[DESCRIPCION PRODUCTS] AS MostPurchasedProduct,
+		TotalCost AS TotalCostForProduct,
+		TotalQuantity AS TotalQuantityPurchased
+	FROM ClientTopProductPerMonth
+	WHERE Rank = 1
